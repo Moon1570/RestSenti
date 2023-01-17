@@ -3,6 +3,9 @@ from rest_framework.response import Response
 from .models import Records
 from .serializers import viewSerializer,postSerializer
 from .sentimentanalyser import sentiment_predict
+from django.http.response import JsonResponse
+from rest_framework.parsers import JSONParser
+from rest_framework import status
 
 @api_view(['GET'])
 def user_records(request):
@@ -13,15 +16,21 @@ def user_records(request):
     
 @api_view(['POST'])
 def add_new(request):
-    serializer = postSerializer(data=request.data)
+    new_data = JSONParser().parse(request)
+    serializer = postSerializer(data=new_data)
     if serializer.is_valid():
-        sentiment = sentiment_predict(str(request.data['sentance']))
+        records = Records.objects.filter(uid=str(new_data['uid']),sentance=str(new_data['sentance']))
+        if records.count():
+            records = records[0]
+            serializer2 = viewSerializer(records)
+            return Response(serializer2.data)
+        sentiment = sentiment_predict(str(new_data['sentance']))
         serializer.save(result=sentiment[1])
-        record = Records.objects.filter(uid=request.data['uid'],sentance=request.data['sentance'],result=sentiment[1])
-        serializer = viewSerializer(record[0]);
-        return Response(serializer.data, status=201)
-    return Response(serializer.errors, status=400)
+        records = Records.objects.filter(uid=str(new_data['uid']),sentance=str(new_data['sentance']))[0]
+        serializer2 = viewSerializer(records)
+        return Response(serializer2.data)
 
+    return JsonResponse(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 def records_by_userid(request,pk):
